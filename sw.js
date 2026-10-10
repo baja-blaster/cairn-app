@@ -1,5 +1,5 @@
 /* Service worker: keeps the app working offline. Pages load from the network when online (so updates arrive) and from this cache when not. */
-const VERSION = 'v-c40e7106db';
+const VERSION = 'v-7ecca81330';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim())); });

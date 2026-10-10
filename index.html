@@ -54,6 +54,14 @@ h1,h2,h3,p{margin:0}
 .nav-btn{display:flex;align-items:center;gap:12px;width:100%;padding:10px 12px;border:0;background:none;color:var(--muted);font-weight:600;border-radius:10px;cursor:pointer;text-align:left}
 .nav-btn:hover{background:color-mix(in srgb,var(--line) 45%,transparent)}
 .nav-btn[aria-current="page"]{background:var(--accent-soft);color:var(--accent)}
+.syncchip{display:none;align-items:center;gap:7px;font:600 12px/1 inherit;font-family:inherit;color:var(--muted);background:var(--card,transparent);border:1px solid var(--line);border-radius:999px;padding:8px 11px;cursor:pointer}
+.syncchip i{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
+.syncchip.ok i{background:#2e9e5b}.syncchip.wait i,.syncchip.busy i{background:#d9a21b}.syncchip.bad i{background:var(--danger)}.syncchip.bad{color:var(--danger)}
+@media(max-width:899px){.syncchip{display:inline-flex}}
+.scanbox{position:relative;aspect-ratio:4/3;background:#111;border-radius:14px;overflow:hidden;margin-bottom:10px}.scanbox video{width:100%;height:100%;object-fit:cover}.scanbox .scanline{position:absolute;left:8%;right:8%;top:50%;height:2px;background:rgba(255,70,70,.9);box-shadow:0 0 8px rgba(255,70,70,.7)}
+.csvlist{max-height:42vh;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:0 10px;margin:8px 0}
+.csvrow{display:grid;grid-template-columns:auto 1fr auto;gap:2px 10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}.csvrow:last-child{border-bottom:0}
+.csvrow .n{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.csvrow .a{font-variant-numeric:tabular-nums}.csvrow .sub2{grid-column:2/4;display:flex;gap:8px;align-items:center;color:var(--muted);font-size:13px}.csvrow select{max-width:150px;padding:4px 6px;font-size:13px}
 .blk.ext{border-left-style:dashed;background-image:repeating-linear-gradient(135deg,transparent 0 7px,color-mix(in srgb,var(--c) 7%,transparent) 7px 8px)}
 .gc-row{display:grid;grid-template-columns:1fr 150px;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
 .dform label.gc-on{flex-direction:row;align-items:center;gap:9px;font-weight:600}
@@ -516,8 +524,8 @@ const ic = (n,sz) => {
 
 /* ---------- state ---------- */
 const LS_KEY = 'daybook:v1', LS_TIMER = 'daybook:timer';
-const normFood = f => Object.assign({ goal:2000, shopDays:[], shopped:'', macroGoals:{ p:0, c:0, f:0 }, pantry:[], grocery:[], plan:[], recipes:[], cals:[], log:[], totals:{}, water:{}, rolled:{}, waterGoal:1893, waterUnit:'oz', weights:[], weightUnit:'lb', u:0 }, f || {});
-const normBudget = b => b ? Object.assign({ cur:'$', income:0, cats:[], bills:[], tx:[], u:0 }, b) : null;
+const normFood = f => Object.assign({ goal:2000, shopDays:[], shopped:'', macroGoals:{ p:0, c:0, f:0 }, pantry:[], grocery:[], plan:[], recipes:[], cals:[], log:[], totals:{}, water:{}, rolled:{}, products:[], waterGoal:1893, waterUnit:'oz', weights:[], weightUnit:'lb', u:0 }, f || {});
+const normBudget = b => b ? Object.assign({ cur:'$', income:0, cats:[], bills:[], tx:[], goals:[], u:0 }, b) : null;
 const defaults = () => ({ v:1, updatedAt:0, sync:{ v:2, su:{}, tombs:[] }, tasks:[], events:[], habits:[], goals:[], focus:[], quit:null, people:[], budget:null, food:normFood(), sleep:[], lastWrap:'', lastReview:'',
   exercise:{ goal:{ sessions:3, minutes:150 }, log:[] },
   settings:{ dayStart:7, dayEnd:21, weekStart:0, reviewDay:0, sleepGoal:8, backupEvery:30, summaryMode:'written', summaryOrder:[], summaryHidden:[], tagTargets:{}, hideWords:'wake up, bedtime, go to sleep', focusLen:25, breakLen:5, dailyFocus:120, theme:'auto' } });
@@ -532,7 +540,7 @@ try { const raw=localStorage.getItem(LS_KEY); if(raw) state = normalize(JSON.par
 
 const keepLatest = (arr, n, key) => arr.length <= n ? arr : arr.slice().sort((a,b) => { const x = String(key(a)), y = String(key(b)); return x < y ? -1 : x > y ? 1 : (String(a.id) < String(b.id) ? -1 : 1); }).slice(-n);
 function pruneSig(){
-  const F = state.food; return [state.tasks.length, state.focus.length, state.events.length, state.exercise.log.length, state.sleep.length, state.budget ? state.budget.tx.length : 0, F.log.length, F.plan.length, F.weights.length, Object.keys(F.totals).length, Object.keys(F.water).length, Object.keys(F.rolled).length, state.quit ? state.quit.cravings.length : 0].join();
+  const F = state.food; return [F.products.length, state.tasks.length, state.focus.length, state.events.length, state.exercise.log.length, state.sleep.length, state.budget ? state.budget.tx.length : 0, F.log.length, F.plan.length, F.weights.length, Object.keys(F.totals).length, Object.keys(F.water).length, Object.keys(F.rolled).length, state.quit ? state.quit.cravings.length : 0].join();
 }
 function prune(){
   const before = pruneSig(), cut = Date.now() - 120*864e5;
@@ -550,7 +558,7 @@ function prune(){
     const rc = addDays(todayStr(), -240); Object.keys(F.rolled).forEach(id => { if(F.rolled[id] < rc) delete F.rolled[id]; });
     const tk = Object.keys(F.totals).sort(); if(tk.length > 800) tk.slice(0, tk.length-800).forEach(k => { delete F.totals[k]; });
     const wk = Object.keys(F.water).sort(); if(wk.length > 800) wk.slice(0, wk.length-800).forEach(k => { delete F.water[k]; });
-    F.weights = keepLatest(F.weights, 2000, x => x.date); }
+    F.weights = keepLatest(F.weights, 2000, x => x.date); F.products = keepLatest(F.products, 3000, x => String(x.u || 0).padStart(15,'0')); }
   if(state.budget){ const cb = addDays(todayStr(), -730); state.budget.tx = state.budget.tx.filter(t => t.date >= cb); }
   return pruneSig() !== before;
 }
@@ -559,7 +567,7 @@ prune();
 const ui = { view:'summary', date:todayStr(), month:todayStr().slice(0,7), pane:'schedule', taskFilter:'open', goalFilter:null, projectId:null, trOffset:0, scrollNow:true, canDownload:false, tagFilter:null, habitTab:'habits', dayView:'day', taskPane:'tasks', budgetMonth:todayStr().slice(0,7), foodTab:'today', foodDate:todayStr(), foodWeek:todayStr(), jTab:'day', jDate:todayStr(), noteId:null, jQuery:'', noteFolder:'all' };
 /* ---------- sync foundation: change tracking, merging and storage adapters ---------- */
 const SCHEMA = 2;
-const COLLS = ['tasks','events','habits','goals','focus','people','sleep','exercise.log','food.pantry','food.grocery','food.plan','food.recipes','food.cals','food.log','food.weights','budget.bills','budget.tx'];
+const COLLS = ['tasks','events','habits','goals','focus','people','sleep','exercise.log','food.pantry','food.products','food.grocery','food.plan','food.recipes','food.cals','food.log','food.weights','budget.bills','budget.tx','budget.goals'];
 const getPath = (st, path) => path.split('.').reduce((o,k) => (o == null ? undefined : o[k]), st);
 const setPath = (st, path, v) => { const ks = path.split('.'), last = ks.pop(), o = ks.reduce((a,k) => (a == null ? a : a[k]), st); if(o) o[last] = v; };
 const SINGLES = {
@@ -662,14 +670,16 @@ const engine = { adapters:[], timer:null, retry:null, busy:false, dirty:false, l
 function noteRemote(a, k, data){ const c = canonPart(k, data); (engine.lastRemote[a.id] = engine.lastRemote[a.id] || {})[k] = c; if(!a.ownLast) (engine.last[a.id] = engine.last[a.id] || {})[k] = c; }
 function engStatus(id, patch){ engine.st[id] = Object.assign(engine.st[id] || { state:'idle', last:0, err:'', pending:false }, patch); refreshStatus(); }
 function refreshStatus(){
-  const el = $('#status'); if(!el) return;
-  const ad = engine.adapters; let txt;
+  const ad = engine.adapters; let txt, chip = 'Local', cls = '';
   if(!ad.length) txt = 'Saved on this device only.';
   else {
     const sts = ad.map(a => engine.st[a.id] || {}), err = sts.find(x => x.state === 'error'), busy = sts.find(x => x.state === 'syncing');
-    txt = engine.big ? 'Nearly out of storage. Export a backup.' : err ? 'Could not sync. Still saved on this device.' : busy ? 'Syncing...' : (engine.dirty || sts.some(x => x.pending)) ? 'Changes waiting to sync.' : 'Synced '+agoText(Math.min.apply(null, sts.map(x => x.last || Date.now())))+'.';
+    const ago = agoText(Math.min.apply(null, sts.map(x => x.last || Date.now())));
+    txt = engine.big ? 'Nearly out of storage. Export a backup.' : err ? 'Could not sync. Still saved on this device.' : busy ? 'Syncing...' : (engine.dirty || sts.some(x => x.pending)) ? 'Changes waiting to sync.' : 'Synced '+ago+'.';
+    chip = err ? 'Sync problem' : busy ? 'Syncing...' : (engine.dirty || sts.some(x => x.pending)) ? 'Waiting to sync' : 'Synced '+ago; cls = err ? 'bad' : busy ? 'busy' : (engine.dirty || sts.some(x => x.pending)) ? 'wait' : 'ok';
   }
-  el.textContent = txt;
+  const el = $('#status'); if(el) el.textContent = txt;
+  try { document.querySelectorAll('[data-sync-text]').forEach(t => { t.textContent = chip; if(t.parentNode) t.parentNode.className = 'syncchip'+(cls ? ' '+cls : ''); }); } catch(e){}
 }
 function setStatus(){ refreshStatus(); }
 function cacheLocal(){ try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch(e){} }
@@ -725,7 +735,7 @@ function mergeIn(rs, label){
   state = merged; indexState();
   if(prune()){ stampChanges(); engine.dirty = true; }   /* trimming old data counts as a real change, so it travels to other devices instead of coming back */
   cacheLocal(); applyTheme();
-  if(!jrTyping()) render();
+  if(!jrTyping()){ render(); toast('Updated from another device.'); }
   return true;
 }
 function platformAdapter(db, uid2){
@@ -1464,7 +1474,7 @@ function navHTML(){
   return NAV.map(n => '<button class="nav-btn" data-act="nav" data-view="'+n[0]+'"'+((ui.view===n[0] || (n[0]==='tasks' && ui.view==='project') || (n[0]==='summary' && (ui.view==='review' || ui.view==='wrapup' || ui.view==='insights')))?' aria-current="page"':'')+'>'+ic(n[0],20)+'<span>'+n[1]+'</span></button>').join('');
 }
 function topActions(extra){
-  return '<div class="actions">'+(extra||'')+'<button class="mini" data-act="open-focus" hidden><i></i><span data-timer-text></span></button>'+
+  return '<div class="actions">'+(extra||'')+'<button class="mini" data-act="open-focus" hidden><i></i><span data-timer-text></span></button><button class="syncchip" data-act="sync-chip" aria-label="Sync status. Tap to sync now."><i></i><span data-sync-text></span></button>'+
     '<button class="icon-btn" data-act="search" aria-label="Search everything" title="Search (press /)">'+ic('search',20)+'</button><button class="icon-btn" data-act="settings" aria-label="Settings">'+ic('sliders',20)+'</button></div>';
 }
 
@@ -2541,7 +2551,7 @@ function foodMealsHTML(){
     return '<div class="mday'+(ds===today?' today':'')+'"><div class="mday-h"><b>'+esc(loc(fromYmd(ds),{weekday:'long',month:'short',day:'numeric'}))+'</b><span class="hint">'+(kc ? fmtN(kc)+' planned' : '')+'</span><button class="btn sm" data-act="plan-meal" data-date="'+ds+'">Add</button></div>'+ms.map(mealRow).join('')+'</div>'; }).join('');
   const rec = f.recipes.slice().sort((a,b) => a.name.localeCompare(b.name));
   return '<div class="qgrid"><div><div class="actions" style="margin-bottom:14px"><button class="icon-btn" data-act="meals-prev" aria-label="Previous week">'+ic('left')+'</button><b>'+esc(shortD(days[0])+' to '+shortD(days[6]))+'</b><button class="icon-btn" data-act="meals-next" aria-label="Next week">'+ic('right')+'</button><button class="btn sm" data-act="meals-today">This week</button></div>'+
-    '<div class="actions" style="margin-bottom:10px"><button class="btn sm primary" data-act="groc-from-plan" data-from="'+from+'" data-to="'+days[6]+'">Add this week\'s groceries</button></div>'+
+    '<div class="actions" style="margin-bottom:10px"><button class="btn sm primary" data-act="groc-from-plan" data-from="'+from+'" data-to="'+days[6]+'">Add this week\'s groceries</button><button class="btn sm" data-act="meals-copy">Copy last week\'s meals</button></div>'+
     '<p class="hint" style="margin-bottom:6px">Ingredients for planned meals are checked against your pantry. Only what you are missing goes on the list.</p>'+dayBlocks+'</div>'+
     '<div>'+cookHTML()+'<div class="sec-title">Recipes<button class="btn sm" data-act="new-recipe">New recipe</button><button class="btn sm" data-act="import-recipe">Import</button></div>'+
     (rec.length ? rec.map(r => '<div class="tx"><div style="flex:1;min-width:0;cursor:pointer" role="button" tabindex="0" data-act="edit-recipe" data-id="'+r.id+'"><b>'+esc(r.name)+'</b><div class="hint">'+fmtN(r.kcal)+' cal per serving, '+r.ingredients.length+(r.ingredients.length===1?' ingredient':' ingredients')+'</div></div><button class="btn sm" data-act="plan-meal" data-recipe="'+r.id+'" data-date="'+today+'">Plan it</button></div>').join('')
@@ -2553,7 +2563,7 @@ function foodPantryHTML(){
   const row = p => { const d = pantryDays(p), lab = expLabel(p), out = (Number(p.qty)||0) <= 0;
     return '<div class="pan"><div style="flex:1;min-width:0;cursor:pointer" role="button" tabindex="0" data-act="edit-pantry" data-id="'+p.id+'"><b>'+esc(p.name)+'</b>'+(p.unit ? ' <span class="hint">'+esc(p.unit)+'</span>' : '')+(out ? ' <span class="late-t">out</span>' : '')+(lab ? '<div class="'+(d !== null && d <= 1 ? 'late-t' : 'hint')+'">'+lab+'</div>' : '')+'</div>'+
       '<div class="qty"><button class="icon-btn" data-act="pan-dec" data-id="'+p.id+'" aria-label="One less '+esc(p.name)+'">-</button><b>'+round2(p.qty)+'</b><button class="icon-btn" data-act="pan-inc" data-id="'+p.id+'" aria-label="One more '+esc(p.name)+'">+</button></div></div>'; };
-  return '<div class="qgrid"><div><form class="quick" data-form="quick-pantry"><input name="text" placeholder="Add to pantry, like: 2 cans tomatoes or eggs 12" maxlength="120" autocomplete="off" aria-label="Add to pantry"><button class="btn primary" aria-label="Add">'+ic('plus',18)+'</button></form>'+
+  return '<div class="qgrid"><div><div class="actions" style="margin-bottom:8px"><button class="btn sm" data-act="scan">'+ic('search',16)+'Scan or enter a barcode</button></div><form class="quick" data-form="quick-pantry"><input name="text" placeholder="Add to pantry, like: 2 cans tomatoes or eggs 12" maxlength="120" autocomplete="off" aria-label="Add to pantry"><button class="btn primary" aria-label="Add">'+ic('plus',18)+'</button></form>'+
     (groups.length ? groups.map(g => '<div class="group-h">'+g.c+'</div>'+g.rows.map(row).join('')).join('') : '<p class="empty">Your pantry is empty. Add what you have at home and the app can work out what to buy.</p>')+'</div>'+
     '<div>'+(up.length ? '<div class="sec-title">Use up soon</div>'+up.map(p => '<div class="pan"><div style="flex:1"><b>'+esc(p.name)+'</b><div class="'+(pantryDays(p) <= 1 ? 'late-t' : 'hint')+'">'+expLabel(p)+'</div></div></div>').join('')+'<div style="height:24px"></div>' : '')+
     (low.length ? '<div class="sec-title">Running low</div>'+low.map(p => '<div class="pan"><div style="flex:1"><b>'+esc(p.name)+'</b><div class="hint">'+round2(p.qty)+' left, restock at '+round2(p.min)+'</div></div></div>').join('')+'<div class="actions" style="margin-top:8px"><button class="btn sm" data-act="groc-low">Add these to the grocery list</button></div>' : '')+
@@ -2615,7 +2625,8 @@ function openPantryDialog(id){
   openDialog('<form class="dform" data-form="pantry" data-id="'+(p?p.id:'')+'"><h2>'+(p?'Edit pantry item':'Add to pantry')+'</h2>'+
     '<label>Item<input name="name" value="'+esc(v.name)+'" maxlength="80" required autocomplete="off"></label>'+
     '<div class="row3" style="grid-template-columns:1fr 1fr 1fr"><label>Amount<input type="number" name="qty" min="0" step="0.25" value="'+v.qty+'"></label><label>Unit<input name="unit" value="'+esc(v.unit||'')+'" maxlength="12" placeholder="cans, lb"></label><label>Section'+catSel(v.cat)+'</label></div>'+
-    '<div class="row2"><label>Use by (optional)<input type="date" name="expires" value="'+(v.expires||'')+'"></label><label>Restock at or below<input type="number" name="min" min="0" step="0.25" value="'+(v.min||'')+'" placeholder="Optional"></label></div>'+dActs(p?'delete-pantry':'', p?p.id:'')+'</form>');
+    '<div class="row2"><label>Use by (optional)<input type="date" name="expires" value="'+(v.expires||'')+'"></label><label>Restock at or below<input type="number" name="min" min="0" step="0.25" value="'+(v.min||'')+'" placeholder="Optional"></label></div>'+
+    '<label>Barcode (optional)<input name="barcode" inputmode="numeric" value="'+esc(v.barcode||'')+'" placeholder="Lets scanning find this item" autocomplete="off"></label>'+dActs(p?'delete-pantry':'', p?p.id:'')+'</form>');
 }
 function openGrocDialog(id){
   const g = state.food.grocery.find(x => x.id === id); if(!g) return;
@@ -3010,7 +3021,7 @@ function viewBudget(){
     return '<div class="tx" role="button" tabindex="0" data-act="edit-tx" data-id="'+t.id+'"><div style="flex:1;min-width:0"><b>'+esc(t.note || t.cat || 'Expense')+'</b><div class="hint">'+esc(t.cat||'')+', '+esc(loc(fromYmd(t.date),{month:'short',day:'numeric'}))+'</div></div><span class="amt'+(inc?' in':'')+'">'+(inc?'+':'')+bMoney(b,t.amount)+'</span></div>'; }).join('');
   const q = state.quit, qs = q && q.start ? qStats(q) : null;
   return '<div class="head"><div><h1 class="page-title">'+esc(loc(first,{month:'long',year:'numeric'}))+'</h1><p class="sub">'+(st.planned ? (left >= 0 ? bMoney(b,left)+' left of the '+bMoney(b,st.planned)+' you planned.' : 'You are '+bMoney(b,-left)+' over the '+bMoney(b,st.planned)+' you planned.') : 'Add monthly limits to your categories to see how much is left.')+'</p></div>'+
-    topActions('<button class="icon-btn" data-act="budget-prev" aria-label="Previous month">'+ic('left')+'</button><button class="btn sm" data-act="budget-today">This month</button><button class="icon-btn" data-act="budget-next" aria-label="Next month">'+ic('right')+'</button><button class="btn" data-act="budget-edit">Edit budget</button>')+'</div>'+
+    topActions('<button class="icon-btn" data-act="budget-prev" aria-label="Previous month">'+ic('left')+'</button><button class="btn sm" data-act="budget-today">This month</button><button class="icon-btn" data-act="budget-next" aria-label="Next month">'+ic('right')+'</button><label class="btn" style="cursor:pointer;display:inline-flex;font-weight:600">Import CSV<input id="csvFile" type="file" accept=".csv,.txt,text/csv,text/plain" hidden></label><button class="btn" data-act="budget-edit">Edit budget</button>')+'</div>'+
     '<div class="qgrid"><div>'+
       '<form class="bq" data-form="quick-tx" data-date="'+(cur?todayStr():mk+'-01')+'"><input type="number" name="amount" min="0" step="0.01" placeholder="Amount" required aria-label="Amount"><select name="cat" aria-label="Category">'+(catNames.length?catNames:['Other']).map(n => '<option>'+esc(n)+'</option>').join('')+'<option>Income</option></select><input name="note" placeholder="Note (optional)" maxlength="80" autocomplete="off" aria-label="Note"><button class="btn primary">'+ic('plus',18)+'Add</button></form>'+
       '<div class="qrow"><span>Spent</span><b>'+bMoney(b,st.spent)+'</b></div>'+
@@ -3019,8 +3030,126 @@ function viewBudget(){
       (perDay !== null ? '<p class="hint" style="margin-top:10px">You can spend about '+bMoney(b,perDay)+' a day for the rest of the month.</p>' : '')+
       '<div class="sec-title" style="margin-top:30px">Categories</div>'+(catRows+otherRow || '<p class="empty">No categories yet. Add some in Edit budget.</p>')+
       '<div class="sec-title" style="margin-top:30px">Bills<button class="btn sm" data-act="new-bill">Add bill</button></div>'+(bills || '<p class="empty">Add rent, subscriptions and other recurring bills. They show on your calendar.</p>')+
+      '<div class="sec-title" style="margin-top:30px">Savings goals<button class="btn sm" data-act="new-sgoal">Add goal</button></div>'+(sgoalRows(b) || '<p class="empty">Saving for something? Add a goal and track what you have put aside.</p>')+
       (qs && q.pack ? '<p class="note" style="margin-top:26px">Not smoking has kept about '+qMoney(q,qs.saved)+' in your pocket since you quit.</p>' : '')+
     '</div><div><div class="sec-title">Transactions<small>'+txs.length+'</small></div>'+(txRows || '<p class="empty">Nothing logged this month. Use the form to add your first purchase.</p>')+'</div></div>';
+}
+const monthsTo = ds => Math.max(1, Math.ceil(dayDiff(todayStr(), ds)/30.44));
+function sgoalRows(b){
+  return (b.goals || []).slice().sort((x,y) => (Number(x.saved) >= Number(x.target) ? 1 : 0)-(Number(y.saved) >= Number(y.target) ? 1 : 0) || (x.date || '9999').localeCompare(y.date || '9999') || x.name.localeCompare(y.name)).map(g => {
+    const tgt = Number(g.target) || 0, sv = Number(g.saved) || 0, done = tgt > 0 && sv >= tgt, pct = tgt ? Math.min(100, Math.round(sv/tgt*100)) : 0, rem = Math.max(0, tgt-sv);
+    let hint = done ? 'Goal reached' : bMoney(b, rem)+' to go';
+    if(!done && g.date){ const late = dayDiff(todayStr(), g.date) < 0; hint += late ? ', target date passed ('+shortD(g.date)+')' : ', by '+shortD(g.date)+' that is about '+bMoney(b, rem/monthsTo(g.date))+' a month'; }
+    return '<div style="margin:14px 0"><div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline"><span style="cursor:pointer;min-width:0" role="button" tabindex="0" data-act="edit-sgoal" data-id="'+g.id+'"><b>'+esc(g.name)+'</b></span><span class="hint">'+bMoney(b, sv)+' of '+bMoney(b, tgt)+'</span></div>'+
+      '<div class="bar" style="margin:6px 0 4px"><i style="width:'+pct+'%"></i></div><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><span class="hint">'+esc(hint)+'</span>'+(done ? '' : '<button class="btn sm" data-act="sgoal-money" data-id="'+g.id+'">Add money</button>')+'</div></div>';
+  }).join('');
+}
+function openSGoalDialog(id){
+  const b = state.budget; if(!b) return; const g = id ? (b.goals || []).find(x => x.id === id) : null, v = Object.assign({ name:'', target:'', saved:0, date:'' }, g || {});
+  openDialog('<form class="dform" data-form="sgoal" data-id="'+(g ? g.id : '')+'"><h2>'+(g ? 'Edit savings goal' : 'New savings goal')+'</h2><label>What are you saving for?<input name="name" value="'+esc(v.name)+'" maxlength="60" required autocomplete="off" placeholder="Emergency fund, trip, laptop"></label>'+
+    '<div class="row2"><label>Target amount<input type="number" name="target" min="1" step="0.01" value="'+v.target+'" required></label><label>Saved so far<input type="number" name="saved" min="0" step="0.01" value="'+v.saved+'"></label></div>'+
+    '<label>Target date (optional)<input type="date" name="date" value="'+(v.date || '')+'"></label>'+dActs(g ? 'delete-sgoal' : '', g ? g.id : '')+'</form>');
+}
+function openSGoalMoney(id){
+  const b = state.budget, g = b && (b.goals || []).find(x => x.id === id); if(!g) return;
+  openDialog('<form class="dform" data-form="sgoal-money" data-id="'+g.id+'"><h2>Add money to '+esc(g.name)+'</h2><p class="hint" style="margin-top:-6px">You have '+bMoney(b, g.saved)+' of '+bMoney(b, g.target)+'. Use a minus sign to take money out.</p>'+
+    '<label>Amount<input type="number" name="amount" step="0.01" required autocomplete="off"></label><div class="dactions"><button type="button" class="btn" data-act="close-dialog">Cancel</button><span class="sp"></span><button class="btn primary">Add</button></div></form>');
+}
+
+/* ---------- importing a bank CSV ---------- */
+let pendingCsv = null;
+function parseCsv(text){
+  text = String(text == null ? '' : text).replace(/^\uFEFF/, '');
+  const first = text.split(/\r?\n/).find(l => l.trim()) || '', counts = { ',':0, ';':0, '\t':0 }; let inq = false;
+  for(const ch of first){ if(ch === '"') inq = !inq; else if(!inq && counts[ch] !== undefined) counts[ch]++; }
+  let delim = ','; Object.keys(counts).forEach(k => { if(counts[k] > counts[delim]) delim = k; });
+  const rows = []; let row = [], cell = '', q = false;
+  for(let i = 0; i < text.length; i++){
+    const ch = text[i];
+    if(q){ if(ch === '"'){ if(text[i+1] === '"'){ cell += '"'; i++; } else q = false; } else cell += ch; }
+    else if(ch === '"') q = true;
+    else if(ch === delim){ row.push(cell); cell = ''; }
+    else if(ch === '\n' || ch === '\r'){ if(ch === '\r' && text[i+1] === '\n') i++; row.push(cell); cell = ''; if(row.some(c => c.trim() !== '')) rows.push(row); row = []; }
+    else cell += ch;
+  }
+  row.push(cell); if(row.some(c => c.trim() !== '')) rows.push(row);
+  return { rows:rows, delim:delim };
+}
+function ymdChecked(y, m, d){ if(!(y >= 1990 && y <= 2100 && m >= 1 && m <= 12 && d >= 1 && d <= 31)) return ''; const t = new Date(y, m-1, d); return t.getMonth() === m-1 ? y+'-'+pad(m)+'-'+pad(d) : ''; }
+function parseCsvDate(str, order){
+  const t = String(str == null ? '' : str).trim(); let m;
+  if((m = /^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/.exec(t))) return ymdChecked(+m[1], +m[2], +m[3]);
+  if((m = /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})/.exec(t))){ let y = +m[3]; if(y < 100) y += 2000; return order === 'dmy' ? ymdChecked(y, +m[2], +m[1]) : ymdChecked(y, +m[1], +m[2]); }
+  if(/[A-Za-z]{3}/.test(t)){ const dt = new Date(t); if(!isNaN(dt.getTime())) return ymdChecked(dt.getFullYear(), dt.getMonth()+1, dt.getDate()); }
+  return '';
+}
+function parseCsvAmount(str){
+  let t = String(str == null ? '' : str).trim(); if(!t) return null; let neg = false;
+  if(/^\(.*\)$/.test(t)){ neg = true; t = t.slice(1, -1); }
+  if(/-\s*$/.test(t)){ neg = true; t = t.replace(/-\s*$/, ''); }
+  if(/^[+\s]*-/.test(t)){ neg = true; t = t.replace(/^[+\s-]+/, ''); }
+  t = t.replace(/[^\d.,]/g, ''); if(!/\d/.test(t)) return null;
+  if(t.lastIndexOf(',') > t.lastIndexOf('.') && /,\d{1,2}$/.test(t)) t = t.replace(/\./g, '').replace(',', '.'); else t = t.replace(/,/g, '');
+  const n = Number(t); return isNaN(n) ? null : (neg ? -n : n);
+}
+function csvDetect(rows){
+  const head = (rows[0] || []).map(h => String(h).trim().toLowerCase());
+  const hasHeader = head.some(h => /date|amount|description|payee|memo|debit|credit|details|narrative|merchant|name|value/.test(h)) && !head.some(h => h && /^[-+()$€£\d.,\s\/]+$/.test(h));
+  const find = re => head.findIndex(h => re.test(h)), det = { hasHeader:hasHeader, date:-1, desc:-1, amount:-1, debit:-1, credit:-1 };
+  const data = hasHeader ? rows.slice(1) : rows, cols = Math.max.apply(null, rows.slice(0, 50).map(r => r.length).concat([1]));
+  if(hasHeader){
+    det.date = find(/^(transaction |posted |posting |trans\.? |booking |value )?date|^posted/); if(det.date < 0) det.date = find(/date/);
+    det.desc = find(/^description|^payee|^merchant|^details|^narrative|^memo|^name|^reference/); if(det.desc < 0) det.desc = find(/description|payee|memo|details|name/);
+    det.amount = find(/^amount|^value$|^total$|^transaction amount/); det.debit = find(/debit|withdrawal|paid out|money out|^out$/); det.credit = find(/credit|deposit|paid in|money in|^in$/);
+    if(det.amount >= 0) { det.debit = -1; det.credit = -1; }
+  }
+  const sample = data.slice(0, 40), frac = (c, f) => sample.length ? sample.filter(r => f(r[c])).length/sample.length : 0;
+  if(det.date < 0) for(let c = 0; c < cols; c++) if(frac(c, v => !!parseCsvDate(v, 'mdy')) >= 0.6){ det.date = c; break; }
+  if(det.amount < 0 && det.debit < 0 && det.credit < 0) for(let c = cols-1; c >= 0; c--) if(c !== det.date && frac(c, v => parseCsvAmount(v) !== null && /\d/.test(String(v))) >= 0.6){ det.amount = c; break; }
+  if(det.desc < 0){ let best = -1, bl = 0; for(let c = 0; c < cols; c++){ if(c === det.date || c === det.amount || c === det.debit || c === det.credit) continue; const avg = sample.reduce((a, r) => a+String(r[c] == null ? '' : r[c]).length, 0)/Math.max(1, sample.length); if(avg > bl){ bl = avg; best = c; } } det.desc = best; }
+  return det;
+}
+function csvCandidates(rows, opt){
+  const det = csvDetect(rows), data = det.hasHeader ? rows.slice(1) : rows, items = []; let skipped = 0, neg = 0, pos = 0;
+  if(opt.order === undefined){ let dmy = false; data.slice(0, 200).forEach(r => { const m = /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-]\d{2,4}/.exec(String(r[det.date] == null ? '' : r[det.date]).trim()); if(m && +m[1] > 12) dmy = true; }); opt.order = dmy ? 'dmy' : 'mdy'; }
+  if(det.amount >= 0) data.forEach(r => { const a = parseCsvAmount(r[det.amount]); if(a < 0) neg++; else if(a > 0) pos++; });
+  if(opt.negIsExpense === undefined) opt.negIsExpense = neg >= pos;
+  data.forEach(r => {
+    const date = parseCsvDate(r[det.date], opt.order); let amt = 0, kind = 'expense';
+    if(det.amount >= 0){ const a = parseCsvAmount(r[det.amount]); if(a){ kind = (opt.negIsExpense ? a < 0 : a > 0) ? 'expense' : 'income'; amt = Math.abs(a); } }
+    else { const d = det.debit >= 0 ? parseCsvAmount(r[det.debit]) : null, c = det.credit >= 0 ? parseCsvAmount(r[det.credit]) : null; if(d){ kind = 'expense'; amt = Math.abs(d); } else if(c){ kind = 'income'; amt = Math.abs(c); } }
+    if(!date || !amt){ skipped++; return; }
+    items.push({ date:date, amount:Math.round(amt*100)/100, kind:kind, note:String(r[det.desc] == null ? '' : r[det.desc]).replace(/\s+/g, ' ').trim().slice(0, 80) });
+  });
+  return { items:items, skipped:skipped, det:det, order:opt.order, negIsExpense:opt.negIsExpense };
+}
+const csvNorm = n => String(n || '').toLowerCase().replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim();
+const CSV_GUESS = [['Housing', /\brent\b|mortgage|\bhoa\b|landlord/], ['Groceries', /grocer|supermarket|safeway|kroger|trader joe|costco|whole foods|aldi|publix|market/], ['Eating out', /restaurant|cafe|coffee|starbucks|mcdonald|pizza|doordash|uber eats|grubhub|burger|diner|bar &|taqueria/], ['Transport', /\buber\b|lyft|shell|chevron|exxon|\bgas\b|fuel|parking|transit|metro|toll/], ['Subscriptions', /netflix|spotify|hulu|subscription|apple com|youtube|prime video|icloud|patreon/], ['Health', /pharmacy|cvs|walgreens|clinic|dental|medical|doctor/]];
+function suggestCat(b, note, kind){
+  if(kind === 'income') return 'Income';
+  const n = csvNorm(note), names = b.cats.map(c => c.name);
+  if(n){ const hist = b.tx.filter(t => t.kind !== 'income' && t.note && t.cat).sort((x, y) => (y.t || 0)-(x.t || 0)), w2 = n.split(' ').slice(0, 2).join(' ');
+    const exact = hist.find(t => csvNorm(t.note) === n) || hist.find(t => w2.length > 3 && csvNorm(t.note).split(' ').slice(0, 2).join(' ') === w2); if(exact) return exact.cat; }
+  for(const g of CSV_GUESS){ if(g[1].test(n)){ const hit = names.find(x => x.toLowerCase() === g[0].toLowerCase()); if(hit) return hit; } }
+  return names.indexOf('Other') >= 0 ? 'Other' : (names[names.length-1] || 'Other');
+}
+function csvPrepare(text, opt){
+  const b = state.budget; if(!b) return null; const { rows } = parseCsv(text); if(rows.length < 1) return { error:'That file is empty.' };
+  const c = csvCandidates(rows, Object.assign({}, opt || {})); if(c.det.date < 0 || (c.det.amount < 0 && c.det.debit < 0 && c.det.credit < 0)) return { error:'I could not find the date and amount columns in that file. It should have a Date column and an Amount column (or Debit and Credit).' };
+  const old = addDays(todayStr(), -730), seen = {}; b.tx.forEach(t => { seen[t.date+'|'+Math.round(t.amount*100)+'|'+t.kind+'|'+csvNorm(t.note).slice(0, 15)] = 1; });
+  c.items.forEach(it => { it.cat = suggestCat(b, it.note, it.kind); it.dup = !!seen[it.date+'|'+Math.round(it.amount*100)+'|'+it.kind+'|'+csvNorm(it.note).slice(0, 15)]; it.old = it.date < old; it.inc = !it.dup && !it.old; });
+  c.items.sort((x, y) => y.date.localeCompare(x.date)); c.text = text; return c;
+}
+function openCsvPreview(c){
+  const b = state.budget; pendingCsv = c; const items = c.items.slice(0, 300), more = c.items.length-items.length;
+  const fresh = c.items.filter(i => i.inc), dups = c.items.filter(i => i.dup).length, olds = c.items.filter(i => i.old).length;
+  const spend = fresh.filter(i => i.kind === 'expense').reduce((a, i) => a+i.amount, 0), inc = fresh.filter(i => i.kind === 'income').reduce((a, i) => a+i.amount, 0);
+  const catOpts = sel => b.cats.map(x => x.name).concat(b.cats.some(x => x.name === 'Income') ? [] : []).map(n => '<option'+(sel === n ? ' selected' : '')+'>'+esc(n)+'</option>').join('')+(b.cats.some(x => x.name === 'Other') ? '' : '<option'+(sel === 'Other' ? ' selected' : '')+'>Other</option>')+'<option'+(sel === 'Income' ? ' selected' : '')+'>Income</option>';
+  openDialog('<form class="dform" data-form="csvimport"><h2>Import transactions</h2><p class="hint" style="margin-top:-6px">Found '+c.items.length+' transactions'+(c.items.length ? ' from '+esc(shortD(c.items[c.items.length-1].date))+' to '+esc(shortD(c.items[0].date)) : '')+'. '+fresh.length+' will be added'+(fresh.length ? ': '+bMoney(b, spend)+' spent, '+bMoney(b, inc)+' income' : '')+'.'+(dups ? ' '+dups+' look like ones you already have and are unticked.' : '')+(olds ? ' '+olds+' are more than two years old and are skipped.' : '')+(c.skipped ? ' '+c.skipped+' rows had no usable date or amount.' : '')+' Nothing is added until you confirm.</p>'+
+    '<div class="row2"><label>Date order<select name="order"><option value="mdy"'+(c.order === 'mdy' ? ' selected' : '')+'>Month/Day/Year</option><option value="dmy"'+(c.order === 'dmy' ? ' selected' : '')+'>Day/Month/Year</option></select></label><label>Spending shows as<select name="neg"><option value="1"'+(c.negIsExpense ? ' selected' : '')+'>Negative (-)</option><option value="0"'+(!c.negIsExpense ? ' selected' : '')+'>Positive (+)</option></select></label></div>'+
+    '<div class="actions" style="margin:0"><button type="button" class="btn sm" data-act="csv-reparse">Apply these two settings</button></div>'+
+    '<div class="csvlist">'+items.map((it, i) => '<div class="csvrow"><input type="checkbox" name="inc" value="'+i+'"'+(it.inc ? ' checked' : '')+(it.old ? ' disabled' : '')+' aria-label="Include '+esc(it.note || 'transaction')+'"><span class="n">'+esc(it.note || (it.kind === 'income' ? 'Income' : 'Expense'))+'</span><span class="a'+(it.kind === 'income' ? ' amt in' : '')+'">'+(it.kind === 'income' ? '+' : '')+bMoney(b, it.amount)+'</span><span class="sub2"><span>'+esc(shortD(it.date))+(it.dup ? ', already have it' : '')+'</span><select name="cat-'+i+'" aria-label="Category">'+catOpts(it.cat)+'</select></span></div>').join('')+'</div>'+(more > 0 ? '<p class="hint">Showing the first 300 of '+c.items.length+'. Import the rest in a second pass.</p>' : '')+
+    '<div class="dactions"><button type="button" class="btn" data-act="close-dialog">Cancel</button><span class="sp"></span><button class="btn primary">Import ticked</button></div></form>');
 }
 function openBudgetEdit(){
   const b = state.budget || { cur:'$', income:0, cats:[], bills:[], tx:[] };
@@ -3208,9 +3337,9 @@ function updateNow(){
 /* ---------- dialogs ---------- */
 const dlg = $('#dlg');
 function openDialog(html){ dlg.innerHTML = html; if(!dlg.open){ if(dlg.showModal) dlg.showModal(); else dlg.setAttribute('open',''); } const f = dlg.querySelector('input:not([type=hidden]),select'); if(f && !('ontouchstart' in window)) f.focus(); }
-function closeDialog(){ stopCraving(); if(dlg.open){ if(dlg.close) dlg.close(); else dlg.removeAttribute('open'); } }
+function closeDialog(){ stopCraving(); scanStop(); if(dlg.open){ if(dlg.close) dlg.close(); else dlg.removeAttribute('open'); } }
 dlg.addEventListener('click', e => { if(e.target === dlg) closeDialog(); });
-dlg.addEventListener('close', () => stopCraving());
+dlg.addEventListener('close', () => { stopCraving(); scanStop(); });
 
 function toast(msg, withUndo){
   const t = $('#toast');
@@ -3307,6 +3436,95 @@ function openSettings(){
     '<p class="hint">Completed tasks and focus sessions older than four months are tidied away automatically to keep your data small, and budget transactions are kept for two years. Export a backup if you want to keep them.</p>'+
     '<div class="actions"><button type="button" class="btn sm" data-act="gcal">Google Calendar</button><button type="button" class="btn sm" data-act="sync-panel">Sync and backup</button><button type="button" class="btn sm" data-act="history">Undo history</button>'+'<button type="button" class="btn sm danger" data-act="erase">Erase everything</button></div>'+
     '<div class="dactions"><span class="sp"></span><button type="button" class="btn" data-act="close-dialog">Cancel</button><button class="btn primary">Save</button></div></form>');
+}
+
+/* ---------- barcode scanning: pantry items remember the product they came from ---------- */
+function gtinOk(c){
+  if(!/^\d+$/.test(c) || [8,12,13,14].indexOf(c.length) < 0) return false;
+  let sum = 0; for(let i = 0; i < c.length-1; i++) sum += Number(c[c.length-2-i])*(i % 2 === 0 ? 3 : 1);
+  return (10-sum % 10) % 10 === Number(c[c.length-1]);
+}
+function upceToA(e){   /* a short UPC-E code back to its full 12-digit UPC-A form */
+  const ns = e[0], a = e[1], b = e[2], c = e[3], d = e[4], f = e[5], g = e[6], chk = e[7];
+  const body = g <= '2' ? ns+a+b+g+'0000'+c+d+f : g === '3' ? ns+a+b+c+'00000'+d+f : g === '4' ? ns+a+b+c+d+'00000'+f : ns+a+b+c+d+f+'0000'+g;
+  return body+chk;
+}
+/* one canonical form per product: EAN-13 for everything 12 to 14 digits long, EAN-8 for short ones; '' when it is not a real code */
+function normCode(raw){
+  const c = String(raw == null ? '' : raw).replace(/[\s-]/g, ''); if(!/^\d+$/.test(c)) return '';
+  if(c.length === 8){ if(gtinOk(c)) return c; if(c[0] <= '1'){ const a = upceToA(c); if(gtinOk(a)) return '0'+a; } return ''; }
+  if(c.length === 12 && gtinOk(c)) return '0'+c;
+  if(c.length === 13 && gtinOk(c)) return c;
+  if(c.length === 14 && gtinOk(c)) return c[0] === '0' ? c.slice(1) : c;
+  return '';
+}
+function catFromOff(tags){
+  const t = (tags || []).join(' ').toLowerCase();
+  return /dair|milk|cheese|yogurt|yoghurt|egg|butter|cream/.test(t) ? 'Dairy and eggs' : /frozen/.test(t) ? 'Frozen' : /meat|fish|seafood|poultry|chicken|beef|pork|sausage|ham\b/.test(t) ? 'Meat and fish' : /beverage|drink|juice|water|soda|coffee|tea\b|beer|wine/.test(t) ? 'Drinks' : /bread|bakery|pastr|cake|biscuit|cookie/.test(t) ? 'Bakery' : /fruit|vegetable|produce|salad/.test(t) ? 'Produce' : '';
+}
+async function offLookup(code){   /* Open Food Facts: free, no key. Not reachable from claude.ai pages, so this quietly returns nothing there. */
+  if(typeof fetch !== 'function') return null;
+  const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null, t = setTimeout(() => { if(ctl) ctl.abort(); }, 6000);
+  try {
+    const r = await fetch('https://world.openfoodfacts.org/api/v2/product/'+encodeURIComponent(code)+'.json?fields=product_name,generic_name,brands,quantity,categories_tags', ctl ? { signal:ctl.signal } : undefined);
+    if(!r || !r.ok) return null; const j = await r.json(); if(!j || j.status !== 1 || !j.product) return null;
+    const p = j.product, name = String(p.product_name || p.generic_name || '').trim(); if(!name) return null;
+    const brand = String(p.brands || '').split(',')[0].trim();
+    return { name:((brand && name.toLowerCase().indexOf(brand.toLowerCase()) < 0 ? brand+' ' : '')+name).slice(0,80), cat:catFromOff(p.categories_tags), size:String(p.quantity || '').slice(0,30) };
+  } catch(e){ return null; } finally { clearTimeout(t); }
+}
+const scanSupported = () => typeof window !== 'undefined' && 'BarcodeDetector' in window && !!(navigator && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+const scan = { stream:null, timer:0, on:false, det:null, ignore:null };
+function scanStop(){
+  scan.on = false; clearTimeout(scan.timer); scan.timer = 0;
+  if(scan.stream){ try { scan.stream.getTracks().forEach(t => t.stop()); } catch(e){} scan.stream = null; }
+}
+function upsertProduct(code, o){ const P = state.food.products, ex = P.find(x => x.id === code); if(ex) Object.assign(ex, o); else P.push(Object.assign({ id:code }, o)); }
+function openScanDialog(msg, noCam){
+  scanStop(); const cam = scanSupported() && !noCam; ui.scanCam = cam;
+  openDialog('<form class="dform" data-form="scancode" data-scan="1"><h2>Scan a barcode</h2>'+
+    (cam ? '<div class="scanbox"><video id="scanVideo" playsinline muted autoplay></video><div class="scanline"></div></div><p class="hint" style="margin:0 0 6px">Hold the barcode in the middle of the picture and keep it steady.</p>' : '<p class="hint" style="margin-top:-6px">'+(scanSupported() ? '' : 'This device cannot scan with the camera here. ')+'Type the number printed under the barcode.</p>')+
+    (msg ? '<p class="hint gc-err">'+esc(msg)+'</p>' : '')+
+    '<label>'+(cam ? 'Or type the number' : 'Barcode number')+'<input name="code" inputmode="numeric" placeholder="for example 5000112637922" autocomplete="off"></label>'+
+    '<div class="dactions"><button type="button" class="btn" data-act="close-dialog">'+(cam ? 'Done' : 'Cancel')+'</button><span class="sp"></span><button class="btn primary">Look up</button></div></form>');
+  if(cam){ try { if(document.activeElement && document.activeElement.blur) document.activeElement.blur(); } catch(e){} scanStart(); }   /* no keyboard over the viewfinder */
+}
+async function scanStart(){
+  try {
+    scan.det = new window.BarcodeDetector({ formats:['ean_13','ean_8','upc_a','upc_e'] });
+    scan.stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:'environment' } }, audio:false });
+    const v = document.querySelector('#scanVideo'); if(!v || !dlg.open){ scanStop(); return; }
+    v.srcObject = scan.stream; try { await v.play(); } catch(e){}
+    scan.on = true;
+    const tick = async () => {
+      if(!scan.on) return;
+      try { if(v.readyState >= 2){ const found = await scan.det.detect(v); for(const r of found){ const c = normCode(r.rawValue); if(c && !(scan.ignore && scan.ignore.code === c && Date.now() < scan.ignore.until)){ scanStop(); try { navigator.vibrate && navigator.vibrate(60); } catch(e){} handleCode(c); return; } } } } catch(e){}
+      if(scan.on) scan.timer = setTimeout(tick, 180);
+    };
+    tick();
+  } catch(e){
+    scanStop();
+    openScanDialog(e && e.name === 'NotAllowedError' ? 'Camera access was declined. You can allow it in the browser settings for this site, or type the number below.' : 'The camera could not start. You can type the number below.', true);
+  }
+}
+async function handleCode(code){
+  const have = state.food.pantry.find(p => p.barcode === code), known = state.food.products.find(x => x.id === code);
+  if(have || known){ openScanResult(code, have, known, null); return; }
+  openDialog('<div class="dform" data-lookup="'+code+'"><h2>Looking it up...</h2><p class="hint">Barcode '+esc(code)+'</p><div class="dactions"><button type="button" class="btn" data-act="close-dialog">Cancel</button></div></div>');
+  const off = await offLookup(code);
+  if(dlg.open && String(dlg.innerHTML).indexOf('data-lookup="'+code+'"') >= 0) openScanResult(code, null, null, off);
+}
+function openScanResult(code, have, known, off){
+  const v = { name:(have && have.name) || (known && known.name) || (off && off.name) || '', unit:(have && have.unit) || (known && known.unit) || '', cat:(have && have.cat) || (known && known.cat) || (off && off.cat) || '', expires:'' };
+  if(!v.cat) v.cat = v.name ? guessCat(v.name) : 'Pantry';
+  const title = have ? 'In your pantry' : known ? 'You have scanned this before' : off ? 'Found it' : 'New product';
+  openDialog('<form class="dform" data-form="scanresult" data-id="'+esc(code)+'"><h2>'+title+'</h2>'+
+    '<p class="hint" style="margin-top:-6px">Barcode '+esc(code)+(have ? '. You have '+round2(have.qty)+(have.unit ? ' '+esc(have.unit) : '')+' now.' : !known && !off ? '. Nothing is known about it yet, so name it once and it will be remembered.' : '.')+(off && off.size ? ' Size: '+esc(off.size)+'.' : '')+'</p>'+
+    '<label>Item<input name="name" value="'+esc(v.name)+'" maxlength="80" required autocomplete="off"></label>'+
+    '<div class="row3" style="grid-template-columns:1fr 1fr 1fr"><label>Add<input type="number" name="qty" min="0.25" step="0.25" value="1"></label><label>Unit<input name="unit" value="'+esc(v.unit)+'" maxlength="12" placeholder="cans, lb"></label><label>Section'+catSel(v.cat)+'</label></div>'+
+    '<label>Use by (optional)<input type="date" name="expires" value="'+v.expires+'"></label>'+
+    '<label class="check"><input type="checkbox" name="remember" checked> Remember this product for next time</label>'+
+    '<div class="dactions">'+(have ? '<button type="button" class="btn sm" data-act="scan-use" data-id="'+esc(code)+'">Use one</button>' : '')+'<button type="button" class="btn" data-act="close-dialog">Cancel</button><span class="sp"></span><button class="btn primary">Add to pantry</button></div></form>');
 }
 
 /* ---------- Google Calendar dialogs ---------- */
@@ -3635,6 +3853,16 @@ const ACTIONS = {
   'meals-prev': () => { ui.foodWeek = addDays(ui.foodWeek,-7); render(); },
   'meals-next': () => { ui.foodWeek = addDays(ui.foodWeek,7); render(); },
   'meals-today': () => { ui.foodWeek = todayStr(); render(); },
+  'meals-copy': () => {
+    const ws = exWeekStart(ui.foodWeek), from = addDays(ws,-7), to = addDays(ws,-1), today = todayStr(), P = state.food.plan;
+    const src = P.filter(m => m.date >= from && m.date <= to).sort((a,b) => a.date.localeCompare(b.date) || slotIdx(a.slot)-slotIdx(b.slot));
+    if(!src.length){ toast('Nothing was planned the week before.'); return; }
+    if(addDays(ws,6) < today){ toast('That week is already over. Open this week or a later one to copy into it.'); return; }
+    const add = [], taken = {}; P.forEach(x => { taken[x.date+'|'+x.slot] = 1; });
+    src.forEach(m => { const d = addDays(m.date,7), k = d+'|'+m.slot; if(d < today || taken[k]) return; taken[k] = 1; const c = Object.assign({}, m, { id:uid(), date:d }); delete c.logged; delete c.logId; delete c.u; add.push(c); });
+    if(!add.length){ toast('Everything from last week is already planned here, or its days have passed.'); return; }
+    snapshot(); add.forEach(c => P.push(c)); save('food'); render(); toast('Copied '+add.length+(add.length === 1 ? ' meal' : ' meals')+' from last week.', true);
+  },
   'new-recipe': () => openRecipeDialog(null),
   'edit-recipe': el => openRecipeDialog(el.dataset.id),
   'delete-recipe': el => { snapshot(); state.food.recipes = state.food.recipes.filter(r => r.id !== el.dataset.id); state.food.plan.forEach(m => { if(m.recipeId === el.dataset.id) m.recipeId = ''; }); save('food'); closeDialog(); render(); toast('Recipe deleted. Meals that used it keep their names and calories.', true); },
@@ -3904,6 +4132,12 @@ const ACTIONS = {
     prune(); save(); pendingBackup = null; closeDialog(); render(); toast('Restored from the backup.', true);
   },
   'sync-panel': () => openSyncPanel(),
+  'new-sgoal': () => openSGoalDialog(''), 'edit-sgoal': el => openSGoalDialog(el.dataset.id), 'sgoal-money': el => openSGoalMoney(el.dataset.id),
+  'delete-sgoal': el => { const b = state.budget; if(!b) return; snapshot(); b.goals = (b.goals || []).filter(x => x.id !== el.dataset.id); save('budget'); closeDialog(); render(); toast('Goal removed.', true); },
+  'csv-reparse': () => { const p = pendingCsv; if(!p) return; const o = dlg.querySelector('select[name=order]'), n = dlg.querySelector('select[name=neg]'); const c = csvPrepare(p.text, { order:o ? o.value : p.order, negIsExpense:n ? n.value === '1' : p.negIsExpense }); if(c && !c.error) openCsvPreview(c); },
+  'scan': () => openScanDialog(),
+  'scan-use': el => { const p = state.food.pantry.find(x => x.barcode === el.dataset.id); if(!p) return; snapshot(); p.qty = round2(Math.max(0, (Number(p.qty)||0)-1)); save('food'); closeDialog(); render(); toast('One '+p.name+' used. '+round2(p.qty)+' left.', true); scan.ignore = { code:el.dataset.id, until:Date.now()+4000 }; if(ui.scanCam) setTimeout(() => openScanDialog(), 350); },
+  'sync-chip': () => { if(engine.adapters.length) engineSyncNow(); else openSyncPanel(); },
   'gcal': () => { gcCalList = null; openGcalDialog(); },
   'gcal-load': async el => {
     if(el) el.textContent = 'Asking Google Calendar...';   /* the first call can wait for you to allow access */
@@ -4050,6 +4284,11 @@ document.addEventListener('change', e => {
     rd.onload = () => { const p = parseBackup(String(rd.result)); if(!p.ok){ toast(p.error); return; } showBackupPreview(p); };
     rd.readAsText(f);
   }
+  if(e.target.id === 'csvFile'){
+    const f = e.target.files && e.target.files[0]; if(!f) return; const rd = new FileReader();
+    rd.onload = () => { const c = csvPrepare(String(rd.result)); if(!c){ toast('Set up your budget first.'); return; } if(c.error){ toast(c.error); return; } if(!c.items.length){ toast('I could not read any transactions from that file.'); return; } openCsvPreview(c); };
+    rd.readAsText(f);
+  }
   if(e.target.id === 'gClientId'){ driveSet({ clientId:String(e.target.value || '').trim() }); }
   if(e.target.id === 'backupEvery'){ state.settings.backupEvery = Number(e.target.value); save(); }
 });
@@ -4174,8 +4413,25 @@ document.addEventListener('submit', e => {
   if(kind === 'pantry'){
     const name = String(fd.get('name')||'').trim(); if(!name) return;
     const rec = { name:name, qty:Math.max(0, Number(fd.get('qty'))||0), unit:String(fd.get('unit')||'').trim().toLowerCase(), cat:String(fd.get('cat')||'Other'), expires:String(fd.get('expires')||''), min:Number(fd.get('min'))||0 };
-    if(id){ const p = state.food.pantry.find(x => x.id === id); if(p) Object.assign(p, rec); } else state.food.pantry.push(Object.assign({ id:uid() }, rec));
+    const bc = normCode(fd.get('barcode')); if(bc) rec.barcode = bc;
+    if(id){ const p = state.food.pantry.find(x => x.id === id); if(p){ Object.assign(p, rec); if(!String(fd.get('barcode')||'').trim()) delete p.barcode; } } else state.food.pantry.push(Object.assign({ id:uid() }, rec));
     ui.foodTab = 'pantry'; save('food'); closeDialog(); render(); return;
+  }
+  if(kind === 'scancode'){
+    const c = normCode(fd.get('code')); if(!c){ openScanDialog('That does not look like a valid barcode. Check the digits and try again.', true); return; }
+    scanStop(); handleCode(c); return;
+  }
+  if(kind === 'scanresult'){
+    const code = id, name = String(fd.get('name')||'').trim(); if(!name) return;
+    const q = Number(fd.get('qty')) > 0 ? Number(fd.get('qty')) : 1, unit = String(fd.get('unit')||'').trim().toLowerCase(), cat = String(fd.get('cat')||'Other'), expires = String(fd.get('expires')||'');
+    snapshot(); let p = state.food.pantry.find(x => x.barcode === code);
+    if(p){ p.qty = round2((Number(p.qty)||0)+q); if(expires) p.expires = expires; p.name = name; if(unit) p.unit = unit; p.cat = cat; }
+    else { p = addPantry({ name:name, qty:q, unit:unit, cat:cat, expires:expires }); p.barcode = code; }
+    if(fd.get('remember')) upsertProduct(code, { name:name, cat:cat, unit:unit });
+    ui.foodTab = 'pantry'; save('food'); closeDialog(); render(); toast('Added '+round2(q)+' '+name+' to the pantry.', true);
+    scan.ignore = { code:code, until:Date.now()+4000 };   /* the item is probably still in front of the camera */
+    if(ui.scanCam) setTimeout(() => openScanDialog(), 350);
+    return;
   }
   if(kind === 'quick-pantry'){
     const raw = String(fd.get('text')||'').trim(); if(!raw) return; const p = parseQtyName(raw);
@@ -4311,6 +4567,23 @@ document.addEventListener('submit', e => {
     state.lastReview = todayStr(); save(); ui.view = 'summary'; render();
     toast('Review saved.'+(pri.length ? ' '+pri.length+(pri.length===1?' priority':' priorities')+' added to next week.' : '')); return;
   }
+  if(kind === 'sgoal'){
+    const b = state.budget; if(!b) return; const name = String(fd.get('name')||'').trim(), target = Math.round(Number(fd.get('target'))*100)/100; if(!name || !(target > 0)) return;
+    const rec = { name:name, target:target, saved:Math.max(0, Math.round((Number(fd.get('saved')) || 0)*100)/100), date:String(fd.get('date')||'') }; b.goals = b.goals || [];
+    if(id){ const g = b.goals.find(x => x.id === id); if(g) Object.assign(g, rec); } else b.goals.push(Object.assign({ id:uid() }, rec));
+    save('budget'); closeDialog(); render(); return;
+  }
+  if(kind === 'sgoal-money'){
+    const b = state.budget, g = b && (b.goals || []).find(x => x.id === id); if(!g) return; const a = Math.round(Number(fd.get('amount'))*100)/100; if(!a) return;
+    snapshot(); g.saved = Math.max(0, Math.round((Number(g.saved)+a)*100)/100); save('budget'); closeDialog(); render();
+    toast(Number(g.saved) >= Number(g.target) ? 'Goal reached: '+g.name+'.' : (a > 0 ? 'Added '+bMoney(b, a)+' to '+g.name+'.' : 'Took '+bMoney(b, -a)+' out of '+g.name+'.'), true); return;
+  }
+  if(kind === 'csvimport'){
+    const b = state.budget, p = pendingCsv; if(!b || !p) return; const idx = fd.getAll('inc').map(Number), items = p.items.slice(0, 300); if(!idx.length){ toast('Nothing ticked, so nothing was added.'); return; }
+    snapshot(); let n = 0, newest = '';
+    idx.forEach(i => { const it = items[i]; if(!it || it.old) return; const cat = String(fd.get('cat-'+i) || it.cat || 'Other'); b.tx.push({ id:uid(), date:it.date, amount:it.amount, cat:it.kind === 'income' ? 'Income' : cat, note:it.note, kind:it.kind, t:Date.now()+n }); n++; if(it.date > newest) newest = it.date; });
+    pendingCsv = null; if(newest) ui.budgetMonth = newest.slice(0, 7); save('budget'); closeDialog(); render(); toast('Imported '+n+(n === 1 ? ' transaction.' : ' transactions.'), true); return;
+  }
   if(kind === 'quick-tx'){
     const b = state.budget; if(!b) return;
     const amount = Math.round(Number(fd.get('amount'))*100)/100; if(!(amount > 0)) return;
@@ -4358,7 +4631,7 @@ document.addEventListener('visibilitychange', () => {
   if(!document.hidden){ updateNow(); updateTimerDOM(); gcAuto(); engine.adapters.forEach(a => { if(a.pollNow && Date.now()-(a.lastPoll || 0) > 10000) a.pollNow(); }); }   /* freshen up when the app comes back to the front */
   else { if(engine.dirty) enginePush(); engine.adapters.forEach(a => { if(a.flushPending) a.flushPending(); }); }   /* save what is waiting before the phone puts the app to sleep */
 });
-setInterval(() => { if(applyDecay()) save(); updateNow(); gcAuto(); if((ui.view === 'summary' || (ui.view === 'habits' && ui.habitTab === 'quit')) && !dlg.open && !document.hidden) render(); }, 60000);
+setInterval(() => { if(applyDecay()) save(); updateNow(); gcAuto(); refreshStatus(); if((ui.view === 'summary' || (ui.view === 'habits' && ui.habitTab === 'quit')) && !dlg.open && !document.hidden) render(); }, 60000);
 
 /* ---------- boot ---------- */
 indexState();
